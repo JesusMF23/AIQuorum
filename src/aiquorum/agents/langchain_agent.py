@@ -1,14 +1,36 @@
-from typing import Tuple, Any
+from typing import Tuple, Any, Optional
+import os
 from aiquorum.agents.base import BaseAgent
 from aiquorum.types import AgentResponse, AgentContext
 
 try:
     from langchain_core.messages import SystemMessage, HumanMessage
+    from langchain_core.prompts import ChatPromptTemplate
     from langchain_openai import ChatOpenAI
 except ImportError:
-    # Just a placeholder if dependencies are not installed,
-    # but we added them to pyproject.toml so they should be there.
+    # Dependencies handled in pyproject.toml
     pass
+
+# Metaprompt Templates
+INITIAL_PROMPT_TEMPLATE = ChatPromptTemplate.from_messages([
+    ("system", "{instructions}"),
+    ("user", "User Prompt: {original_prompt}")
+])
+
+CRITIQUE_PROMPT_TEMPLATE = ChatPromptTemplate.from_messages([
+    ("system", "{instructions}"),
+    ("user", """Original Prompt: {original_prompt}
+
+History of responses:
+{history_text}
+
+Task: Review the previous answers, critique them, and provide an improved answer.
+Evaluate the strengths and weaknesses of the previous responses.
+Then, provide your own improved answer based on your specific perspective.
+Finally, provide a confidence score (0.0 to 1.0) indicating how certain you are that this is the best possible answer.
+
+Ends your response with a JSON object containing 'confidence' (float 0-1) field, like: {{"confidence": 0.9}}""")
+])
 
 class LangChainAgent(BaseAgent):
     """
@@ -25,34 +47,27 @@ class LangChainAgent(BaseAgent):
         self.model = model
 
     def process(self, context: AgentContext) -> AgentResponse:
-        system_msg = SystemMessage(content=self.instructions)
-
         if context.current_step == 0:
-            user_content = f"User Prompt: {context.original_prompt}"
+            prompt_value = INITIAL_PROMPT_TEMPLATE.invoke({
+                "instructions": self.instructions,
+                "original_prompt": context.original_prompt
+            })
         else:
             history_text = "\n\n".join(
                 [f"Step {r.step_number} - {r.agent_name}: {r.content} (Confidence: {r.confidence})"
                  for r in context.previous_responses]
             )
-            user_content = (
-                f"Original Prompt: {context.original_prompt}\n\n"
-                f"History of responses:\n{history_text}\n\n"
-                f"Task: Review the previous answers, critique them, and provide an improved answer. "
-                f"Ends your response with a JSON object containing 'confidence' (float 0-1) field."
-            )
-
-        messages = [system_msg, HumanMessage(content=user_content)]
+            prompt_value = CRITIQUE_PROMPT_TEMPLATE.invoke({
+                "instructions": self.instructions,
+                "original_prompt": context.original_prompt,
+                "history_text": history_text
+            })
 
         # Call the model
-        result = self.model.invoke(messages)
+        result = self.model.invoke(prompt_value)
         content = result.content
 
-        # For simplicity, we are parsing confidence from the text or mocking it.
-        # Ideally we use structured output or function calling.
-        # Here we will try to extract it or default to 0.8
         confidence = self._extract_confidence(content)
-
-        # Clean content if needed (remove the JSON part if we want)
 
         return AgentResponse(
             content=content,
@@ -86,10 +101,22 @@ class OpenRouterAgent(LangChainAgent):
     """
     Convenience class for OpenRouter.
     """
-    def __init__(self, name: str, instructions: str, model: str, api_key: str):
+    def __init__(self, name: str, instructions: str, model: str, api_key: Optional[str] = None):
+        """
+        Initialize an OpenRouter agent.
+
+        :param name: Name of the agent.
+        :param instructions: System prompt.
+        :param model: Model identifier (e.g., 'openai/gpt-4-turbo').
+        :param api_key: OpenRouter API Key. If None, checks OPENROUTER_API_KEY env var.
+        """
+        _api_key = api_key or os.environ.get("OPENROUTER_API_KEY")
+        if not _api_key:
+            raise ValueError("OpenRouter API key must be provided or set in OPENROUTER_API_KEY environment variable.")
+
         llm = ChatOpenAI(
             model=model,
-            openai_api_key=api_key,
+            openai_api_key=_api_key,
             openai_api_base="https://openrouter.ai/api/v1",
             default_headers={
                 "HTTP-Referer": "https://github.com/jules/aiquorum", # Placeholder

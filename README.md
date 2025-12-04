@@ -27,45 +27,63 @@ pip install aiquorum
 
 ## 🛠️ Usage
 
+### Configuration (OpenRouter)
+
+AIQuorum is designed to be used with OpenRouter to access a wide variety of LLMs.
+
+1.  Get an API key from [OpenRouter](https://openrouter.ai/).
+2.  Set it as an environment variable:
+
+```bash
+export OPENROUTER_API_KEY="sk-or-..."
+```
+
+Or use a `.env` file (ensure `python-dotenv` is installed and loaded).
+
 ### Basic Example
 
 ```python
-from aiquorum.agents.base import MockAgent
+import os
+from aiquorum.agents.langchain_agent import OpenRouterAgent
 from aiquorum.workflow.engine import Workflow
 
+# Load env vars if using .env
+# from dotenv import load_dotenv; load_dotenv()
+
 # 1. Define your agents
+# You can mix and match models easily.
 agents = [
-    MockAgent("Architect", "Focus on structure and scalability."),
-    MockAgent("Reviewer", "Critique for security and performance flaws.")
+    OpenRouterAgent(
+        name="Architect",
+        instructions="Focus on structure and scalability. Be critical.",
+        model="openai/gpt-4-turbo"
+    ),
+    OpenRouterAgent(
+        name="Security Expert",
+        instructions="Focus on security vulnerabilities. Be paranoid.",
+        model="anthropic/claude-3-opus"
+    )
 ]
 
 # 2. Configure the workflow
-# Run for up to 5 steps, or stop if confidence reaches 90%
-workflow = Workflow(agents, max_steps=5, confidence_threshold=0.9)
+# Run for up to 3 steps, or stop if confidence reaches 85%
+workflow = Workflow(agents, max_steps=3, confidence_threshold=0.85)
 
 # 3. Run with a prompt
-result = workflow.run("Design a microservices architecture for a banking app.")
+# Step 0: Agents answer independently.
+# Step 1+: Agents see previous answers, critique them, and improve.
+result = workflow.run("Design a secure login system for a healthcare app.")
 
 # 4. Inspect results
-print(f"Final Answer: {result.final_response}")
+print(f"Final Answer by {result.history[-1].agent_name}:")
+print(result.final_response)
 print(f"Confidence: {result.final_confidence}")
 print(f"Total Steps: {result.total_steps}")
 ```
 
-### Using OpenRouter
+## 🧩 Architecture & Flow
 
-```python
-from aiquorum.agents.langchain_agent import OpenRouterAgent
-
-agent = OpenRouterAgent(
-    name="Expert",
-    instructions="You are a helpful assistant.",
-    model="openai/gpt-4-turbo",
-    api_key="sk-or-..."
-)
-```
-
-## 🧩 Architecture
+### Workflow Diagram
 
 ```mermaid
 graph TD
@@ -77,7 +95,7 @@ graph TD
 
     subgraph Iteration Loop
         LoopStart[Step N] --> Review[Agents Review History]
-        Review --> Critique[Critique & Improve]
+        Review --> Critique[Critique & Improve (Meta-Prompt)]
         Critique --> NewEval{Confidence >= Threshold?}
         NewEval -- No --> NextStep[Step N+1]
         NextStep --> LoopStart
@@ -87,10 +105,15 @@ graph TD
     NextStep -- Max Steps Reached --> Finish
 ```
 
-The core components are:
+### The Meta-Prompt
+In Step 0, agents receive the user prompt directly.
+In subsequent steps, **AIQuorum** automatically wraps the prompt in a "Meta-Prompt". This instructs the agent to:
+1.  Read the history of previous responses (from themselves and other agents).
+2.  Critique the strengths and weaknesses.
+3.  Provide an improved answer.
+4.  Rate their confidence in the new answer.
 
-*   **`Agent`**: Wraps an LLM with specific instructions. It receives the workflow history and produces a structured response (Content + Confidence).
-*   **`Workflow`**: Manages the loop. It passes the context (previous answers) to agents and aggregates their confidence scores.
+This logic is handled by `LangChainAgent` and `ChatPromptTemplate`.
 
 ## 📜 License
 
