@@ -1,7 +1,11 @@
 from typing import Tuple, Any, Optional
 import os
+from dotenv import load_dotenv
 from aiquorum.agents.base import BaseAgent
 from aiquorum.types import AgentResponse, AgentContext
+
+# Load environment variables from .env file immediately
+load_dotenv()
 
 try:
     from langchain_core.messages import SystemMessage, HumanMessage
@@ -32,16 +36,16 @@ Finally, provide a confidence score (0.0 to 1.0) indicating how certain you are 
 Ends your response with a JSON object containing 'confidence' (float 0-1) field, like: {{"confidence": 0.9}}""")
 ])
 
-class LangChainAgent(BaseAgent):
+class LLMAgent(BaseAgent):
     """
-    An agent that uses a LangChain ChatModel (e.g., ChatOpenAI, ChatAnthropic).
-    Can be used with OpenRouter by configuring the base_url.
+    A base agent that wraps a LangChain-compatible ChatModel.
+    Useful if you want to bring your own model instance (e.g. strict OpenAI, Anthropic, local LLM).
     """
     def __init__(self, name: str, instructions: str, model: Any):
         """
         :param name: Name of the agent.
         :param instructions: System prompt/persona.
-        :param model: A LangChain ChatModel instance (e.g. ChatOpenAI).
+        :param model: A LangChain ChatModel instance.
         """
         super().__init__(name, instructions)
         self.model = model
@@ -78,15 +82,13 @@ class LangChainAgent(BaseAgent):
 
     def _extract_confidence(self, text: str) -> float:
         # Simple heuristic or regex could go here.
-        # For now, let's just look for "confidence": 0.X or confidence: 0.X
         import re
         # Regex explanation:
         # ["']?       : Optional opening quote
         # confidence  : Literal "confidence"
         # ["']?       : Optional closing quote
         # \s*[:=]\s*  : Separator (colon or equals), optional whitespace
-        # ([0-9]*\.?[0-9]+) : Float capture group
-        # We need to handle optional negative sign for testing robustness, though confidence should be positive.
+        # (-?[0-9]*\.?[0-9]+) : Float capture group (handles optional negative for robustness)
         match = re.search(r'["\']?confidence["\']?\s*[:=]\s*(-?[0-9]*\.?[0-9]+)', text, re.IGNORECASE)
         if match:
             try:
@@ -97,22 +99,29 @@ class LangChainAgent(BaseAgent):
         return 0.5  # Default fallback
 
 
-class OpenRouterAgent(LangChainAgent):
+class Agent(LLMAgent):
     """
-    Convenience class for OpenRouter.
+    The standard agent for AIQuorum.
+    Connects to OpenRouter (default) or any OpenAI-compatible API to access a wide range of models.
     """
     def __init__(self, name: str, instructions: str, model: str, api_key: Optional[str] = None):
         """
-        Initialize an OpenRouter agent.
+        Initialize an AIQuorum Agent.
 
-        :param name: Name of the agent.
-        :param instructions: System prompt.
-        :param model: Model identifier (e.g., 'openai/gpt-4-turbo').
-        :param api_key: OpenRouter API Key. If None, checks OPENROUTER_API_KEY env var.
+        :param name: Name of the agent (e.g., "Architect").
+        :param instructions: The persona and instructions for the agent.
+        :param model: The model identifier (e.g., 'openai/gpt-4-turbo').
+        :param api_key: API Key. If None, checks OPENROUTER_API_KEY environment variable.
         """
+        # Ensure env vars are loaded (in case the user didn't import module at top level)
+        load_dotenv()
+
         _api_key = api_key or os.environ.get("OPENROUTER_API_KEY")
         if not _api_key:
-            raise ValueError("OpenRouter API key must be provided or set in OPENROUTER_API_KEY environment variable.")
+            raise ValueError(
+                "API key missing. Please provide `api_key` argument or set `OPENROUTER_API_KEY` "
+                "in your environment variables or .env file."
+            )
 
         llm = ChatOpenAI(
             model=model,

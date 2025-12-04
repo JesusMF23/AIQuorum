@@ -8,14 +8,14 @@
 >
 > This project was 99% vibe coded as a fun Saturday hack because I wanted to explore and evaluate a number of LLMs side by side in the process of reading books together with LLMs. It's nice and useful to see multiple responses side by side, and also the cross-opinions of all LLMs on each other's outputs. I'm not going to support it in any way, it's provided here as is for other people's inspiration and I don't intend to improve it. Code is ephemeral now and libraries are over, ask your LLM to change it in whatever way you like.
 
-**AIQuorum** is a Python framework for orchestrating a network of AI agents to iteratively solve problems, critique each other's work, and converge on high-confidence solutions. It is designed to work seamlessly with **OpenRouter** and **LangChain**.
+**AIQuorum** is a Python framework for orchestrating a network of AI agents to iteratively solve problems, critique each other's work, and converge on high-confidence solutions.
 
 ## 🚀 Overview
 
 The framework allows you to:
-1.  **Configure Agents**: Define multiple agents with different personas, instructions, and underlying LLMs (via OpenRouter or LangChain).
+1.  **Configure Agents**: Define multiple agents with different personas and underlying models.
 2.  **Iterative Refinement**: Execute a workflow where agents not only answer but also review and improve upon previous iterations.
-3.  **Confidence-Based Termination**: Automatically stop the workflow when a consensus or confidence threshold is met, or after a fixed number of steps.
+3.  **Confidence-Based Termination**: Automatically stop the workflow when a consensus or confidence threshold is met.
 
 ## 📦 Installation
 
@@ -27,38 +27,31 @@ pip install aiquorum
 
 ## 🛠️ Usage
 
-### Configuration (OpenRouter)
+### Configuration
 
-AIQuorum is designed to be used with OpenRouter to access a wide variety of LLMs.
-
-1.  Get an API key from [OpenRouter](https://openrouter.ai/).
-2.  Set it as an environment variable:
+AIQuorum uses OpenRouter (or compatible APIs) to access models.
+Simply create a `.env` file in your project root:
 
 ```bash
-export OPENROUTER_API_KEY="sk-or-..."
+OPENROUTER_API_KEY=sk-or-...
 ```
 
-Or use a `.env` file (ensure `python-dotenv` is installed and loaded).
+The package will automatically load this variable.
 
 ### Basic Example
 
 ```python
-import os
-from aiquorum.agents.langchain_agent import OpenRouterAgent
-from aiquorum.workflow.engine import Workflow
-
-# Load env vars if using .env
-# from dotenv import load_dotenv; load_dotenv()
+from aiquorum import Agent, Workflow
 
 # 1. Define your agents
 # You can mix and match models easily.
 agents = [
-    OpenRouterAgent(
+    Agent(
         name="Architect",
         instructions="Focus on structure and scalability. Be critical.",
         model="openai/gpt-4-turbo"
     ),
-    OpenRouterAgent(
+    Agent(
         name="Security Expert",
         instructions="Focus on security vulnerabilities. Be paranoid.",
         model="anthropic/claude-3-opus"
@@ -83,8 +76,6 @@ print(f"Total Steps: {result.total_steps}")
 
 ## 🧩 Architecture & Flow
 
-### Workflow Diagram
-
 ```mermaid
 graph TD
     Start([User Prompt]) --> Step0[Step 0: Initial Answers]
@@ -108,12 +99,9 @@ graph TD
 ### The Meta-Prompt
 In Step 0, agents receive the user prompt directly.
 In subsequent steps, **AIQuorum** automatically wraps the prompt in a "Meta-Prompt". This instructs the agent to:
-1.  Read the history of previous responses (from themselves and other agents).
+1.  Read the history of previous responses.
 2.  Critique the strengths and weaknesses.
-3.  Provide an improved answer.
-4.  Rate their confidence in the new answer.
-
-This logic is handled by `LangChainAgent` and `ChatPromptTemplate`.
+3.  Provide an improved answer and a confidence score.
 
 ## 📜 License
 

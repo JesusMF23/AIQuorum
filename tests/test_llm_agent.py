@@ -1,9 +1,8 @@
-import pytest
 from unittest.mock import MagicMock
-from aiquorum.agents.langchain_agent import LangChainAgent
+from aiquorum.agents.llm import LLMAgent
 from aiquorum.types import AgentContext, AgentResponse
 
-def test_langchain_agent_calls_invoke():
+def test_llm_agent_calls_invoke():
     # Mock the LLM
     mock_llm = MagicMock()
     # Mock response
@@ -11,7 +10,7 @@ def test_langchain_agent_calls_invoke():
     mock_response.content = "Better answer. \"confidence\": 0.9"
     mock_llm.invoke.return_value = mock_response
 
-    agent = LangChainAgent("TestLC", "You are a test", mock_llm)
+    agent = LLMAgent("TestLC", "You are a test", mock_llm)
 
     context = AgentContext(
         original_prompt="Hello",
@@ -28,9 +27,9 @@ def test_langchain_agent_calls_invoke():
     # Verify invoke was called
     mock_llm.invoke.assert_called_once()
 
-def test_langchain_agent_confidence_extraction():
+def test_llm_agent_confidence_extraction():
     mock_llm = MagicMock()
-    agent = LangChainAgent("Test", "", mock_llm)
+    agent = LLMAgent("Test", "", mock_llm)
 
     # Test cases
     assert agent._extract_confidence('{"confidence": 0.85}') == 0.85
