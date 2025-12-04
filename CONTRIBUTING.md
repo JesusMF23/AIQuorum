@@ -40,4 +40,4 @@ We use `pytest` for testing. Please ensure all existing tests pass and add new t
 
 ## 📜 License
 
-By contributing to this project, you agree that your contributions will be licensed under the project's **PolyForm Noncommercial License 1.0.0**. You acknowledge that the original author retains the exclusive right to license the software for commercial use.
+By contributing to this project, you agree that your contributions will be licensed under the project's **Apache License 2.0**.
