@@ -5,9 +5,10 @@ class BaseAgent(abc.ABC):
     """
     Abstract base class for an agent in the quorum.
     """
-    def __init__(self, name: str, instructions: str):
+    def __init__(self, name: str, instructions: str, monitor: bool = False):
         self.name = name
         self.instructions = instructions
+        self.monitor = monitor
 
     @abc.abstractmethod
     def process(self, context: AgentContext) -> AgentResponse:

@@ -1,43 +1,50 @@
 # Contributing to AIQuorum
 
-Thank you for your interest in contributing to **AIQuorum**! We want to make this project robust and useful for the community while maintaining its high standards.
+First off, thanks for taking the time to contribute! 🎉
 
-## 🌟 How to Contribute
+The following is a set of guidelines for contributing to AIQuorum. These are mostly guidelines, not rules. Use your best judgment, and feel free to propose changes to this document in a pull request.
 
-### 1. Reporting Bugs
-If you find a bug, please open an issue describing:
-- Steps to reproduce the bug.
-- Expected behavior.
-- Actual behavior.
-- Your environment (OS, Python version).
+## 🛠️ Development Setup
 
-### 2. Suggesting Enhancements
-We love new ideas! If you have a suggestion for a feature or improvement:
-- Check if an issue already exists.
-- Open a new issue with a clear description of the proposal and why it is useful.
-
-### 3. Pull Requests
-If you want to contribute code:
-
-1.  **Fork the repository**.
-2.  **Create a branch** for your feature or fix: `git checkout -b feature/amazing-feature`.
+1.  **Fork the repo** and clone it locally.
+2.  **Create a virtual environment**:
+    ```bash
+    python -m venv .venv
+    source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+    ```
 3.  **Install dependencies**:
     ```bash
-    pip install -e ".[dev]"
+    pip install -e .[dev]
     ```
-4.  **Make your changes**. Ensure you follow the coding style (PEP 8).
-5.  **Run tests**:
+4.  **Run Tests**:
     ```bash
     pytest
     ```
-6.  **Commit your changes**. Please use clear commit messages.
-7.  **Push to your branch**: `git push origin feature/amazing-feature`.
-8.  **Open a Pull Request**.
 
-## 🧪 Testing
+## 🏗️ Project Structure
 
-We use `pytest` for testing. Please ensure all existing tests pass and add new tests for any new functionality.
+- `src/aiquorum`: Main source code.
+- `tests`: Unit and integration tests.
+- `examples`: Demo scripts and notebooks.
 
-## 📜 License
+## 📝 Code Style
 
-By contributing to this project, you agree that your contributions will be licensed under the project's **Apache License 2.0**.
+- We follow **PEP 8** guidelines.
+- Please use type hints in all new functions.
+- Run `mypy` if possible to check types.
+
+## 🚀 Submitting a Pull Request
+
+1.  Create a new branch: `git checkout -b feature/my-new-feature`
+2.  Commit your changes: `git commit -am 'Add some feature'`
+3.  Push to the branch: `git push origin feature/my-new-feature`
+4.  Submit a pull request!
+
+## 🐛 Reporting Bugs
+
+Bugs are tracked as GitHub issues. When filing an issue, please include:
+- A clear title and description.
+- A minimal reproduction code snippet.
+- Your Python version and OS.
+
+Thank you for helping improve AIQuorum!

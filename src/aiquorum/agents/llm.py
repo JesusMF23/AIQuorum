@@ -2,7 +2,9 @@ from typing import Tuple, Any, Optional
 import os
 from dotenv import load_dotenv
 from aiquorum.agents.base import BaseAgent
+from aiquorum.agents.base import BaseAgent
 from aiquorum.types import AgentResponse, AgentContext
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 # Load environment variables from .env file immediately
 load_dotenv()
@@ -21,34 +23,52 @@ INITIAL_PROMPT_TEMPLATE = ChatPromptTemplate.from_messages([
     ("user", "User Prompt: {original_prompt}")
 ])
 
+import random
+
 CRITIQUE_PROMPT_TEMPLATE = ChatPromptTemplate.from_messages([
     ("system", "{instructions}"),
     ("user", """Original Prompt: {original_prompt}
 
-History of responses:
+Peer Responses from previous step:
 {history_text}
 
-Task: Review the previous answers, critique them, and provide an improved answer.
-Evaluate the strengths and weaknesses of the previous responses.
-Then, provide your own improved answer based on your specific perspective.
-Finally, provide a confidence score (0.0 to 1.0) indicating how certain you are that this is the best possible answer.
+Task: Peer Review & Improvement
+1. Analyze the perspectives and solutions provided by your peers above.
+2. Identify strengths, weaknesses, and any missing angles in their responses.
+3. Challenge their assumptions if necessary.
+4. Synthesize their insights with your own expertise to provide a SUPERIOR answer.
+
+Your goal is to reach the highest quality answer possible by standing on the shoulders of giants (or critiquing them).
 
 Ends your response with a JSON object containing 'confidence' (float 0-1) field, like: {{"confidence": 0.9}}""")
 ])
+
 
 class LLMAgent(BaseAgent):
     """
     A base agent that wraps a LangChain-compatible ChatModel.
     Useful if you want to bring your own model instance (e.g. strict OpenAI, Anthropic, local LLM).
     """
-    def __init__(self, name: str, instructions: str, model: Any):
+    def __init__(self, name: str, instructions: str, model: Any, monitor: bool = False):
         """
         :param name: Name of the agent.
         :param instructions: System prompt/persona.
         :param model: A LangChain ChatModel instance.
+        :param monitor: Whether to log monitoring events for this agent.
         """
-        super().__init__(name, instructions)
+        super().__init__(name, instructions, monitor=monitor)
         self.model = model
+
+    @retry(
+        reraise=True,
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1, min=2, max=20),
+        # Retrieve original exception to check for rate limits if possible, 
+        # but broadly retrying exceptions that likely transient is safe for now.
+        retry=retry_if_exception_type(Exception)
+    )
+    def _invoke_model(self, prompt_value):
+        return self.model.invoke(prompt_value)
 
     def process(self, context: AgentContext) -> AgentResponse:
         if context.current_step == 0:
@@ -57,18 +77,30 @@ class LLMAgent(BaseAgent):
                 "original_prompt": context.original_prompt
             })
         else:
+            # Filter and shuffle peer responses to avoid positional bias
+            # Council Logic: Exclude self from peer review
+            last_step_num = context.current_step - 1
+            last_step_responses = [
+                r for r in context.previous_responses 
+                if r.step_number == last_step_num and r.agent_name != self.name
+            ]
+            
+            # Shuffle them
+            random.shuffle(last_step_responses)
+            
             history_text = "\n\n".join(
-                [f"Step {r.step_number} - {r.agent_name}: {r.content} (Confidence: {r.confidence})"
-                 for r in context.previous_responses]
+                [f"--- Peer Response ({r.agent_name}) ---\n{r.content}\n(Confidence: {r.confidence})"
+                 for r in last_step_responses]
             )
+            
             prompt_value = CRITIQUE_PROMPT_TEMPLATE.invoke({
                 "instructions": self.instructions,
                 "original_prompt": context.original_prompt,
                 "history_text": history_text
             })
 
-        # Call the model
-        result = self.model.invoke(prompt_value)
+        # Call the model with retries
+        result = self._invoke_model(prompt_value)
         content = result.content
 
         confidence = self._extract_confidence(content)
@@ -104,14 +136,13 @@ class Agent(LLMAgent):
     The standard agent for AIQuorum.
     Connects to OpenRouter (default) or any OpenAI-compatible API to access a wide range of models.
     """
-    def __init__(self, name: str, instructions: str, model: str, api_key: Optional[str] = None):
+    def __init__(self, name: str, instructions: str, model: str, api_key: Optional[str] = None, monitor: bool = False):
         """
-        Initialize an AIQuorum Agent.
-
         :param name: Name of the agent (e.g., "Architect").
         :param instructions: The persona and instructions for the agent.
         :param model: The model identifier (e.g., 'openai/gpt-4-turbo').
         :param api_key: API Key. If None, checks OPENROUTER_API_KEY environment variable.
+        :param monitor: Whether to log monitoring events for this agent.
         """
         # Ensure env vars are loaded (in case the user didn't import module at top level)
         load_dotenv()
@@ -127,9 +158,9 @@ class Agent(LLMAgent):
             model=model,
             openai_api_key=_api_key,
             openai_api_base="https://openrouter.ai/api/v1",
-            default_headers={
-                "HTTP-Referer": "https://github.com/jules/aiquorum", # Placeholder
-                "X-Title": "AIQuorum"
-            }
+            # default_headers={
+            #     "HTTP-Referer": "https://github.com/jules/aiquorum", # Placeholder
+            #     "X-Title": "AIQuorum"
+            # }
         )
-        super().__init__(name, instructions, llm)
+        super().__init__(name, instructions, llm, monitor=monitor)
